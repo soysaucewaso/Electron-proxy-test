@@ -12,7 +12,7 @@ async def main():
     s = time.time()
     # hosts = get_urls()
     hosts = [
-        ("amazon", ["https://www.amazon.com/Hellmanns-Mayonnaise-Condiment-Squeeze-Cage-Free/dp/B091DCC2CH?dib=eyJ2IjoiMSJ9.4ONmHaMWTq1ZHhlXvbCPGauj7swH_JzX45bcACzKBNxV9jmJWPnOyc0b1v46CGHp9OaXikCORs_0qdCVjxScTdiGMAAVSfxlf78w0ngh2q4gGYWEdvjbRBjyZY_8TbhNdZ4In4kBidwii9_p5rxKJZ_sypJe0GRQpdXspjbOIXPZd2qcWWAq4OKMZg4m7MJ34PQRlBGI0bFvyZchtyocDqSwmv7xOJjfYB0Za_dyhRdYt87C8EtQ_JlaOivsyc4j9KzxdBIGlaBSMCy_s7yEpiXp5x3nhX6yIFXUDjXmcHCq4mG-bQyDUoBekapedtjJJbcLYNZGF1nMpLM5JdZN-sGgvoPf2ZaqV9KNsrd6e_jIWDIRPXgeQyPcYwteJ8nV7OWNe0v0tWmEVJ_0LfWg6CoQ0XPDUl963RjRqnij3g5otb394BSUoag1y8En_uGG.fyatwkxFfAD1tAHciWfqTR7MmYkmSQzyWpDvY2JIZOo&dib_tag=se&keywords=mayonnaise&qid=1741154067&sr=8-5"])
+        ("amazon", ["https://www.amazon.com/Action-Pro-Trainer-Cartridge-Ammunition/dp/B004KZ357G?crid=3U3SHOCHXSHQV&dib=eyJ2IjoiMSJ9.q8pcp032LPDg4B88dPlYKa6vDq2r8ceReo_sikBNtXv-51Bzoaq5O-E9-a_CHa1KWdDBZ2FLSluEk7V4655FW48e2ln3daIgU_C1y3omN7CrGPPyLqwglvsn7XMFWByVWc_L2Z2m4aUidXrv3zT700Fx_wZlQMFgAld4eGwEzK5CWZ4V-aCt1mBAd9Q6EKJjPFMNgVBelzN-j3v2_OUkcJ8DKn9lb3kwDbHJSbc-GhY8-vUQ7wQ0MVz82texcncGDvIqq48sGObUxbNquYUXYraj4MMqCTpsUFYJ0G7O8-kFZ6y7Qqwycwm4mudmIyDNe65C7sCptYwHhpwNkGlKCmss1gHmYbe97pZo-k5t-TP1VzATzHg2qtxnXhJ-O1W4IWyC3YmY_Q3mW7ijzmTZD-L4sJYlUYh_AQZMLcIkkfMie1ODiQc5QsNEM_HJeLBL.hgmlN2L13eoKfbQ5bN0m8xAuh83_IITOar2HuqHF_ck&dib_tag=se&keywords=bullet+9mm&qid=1741155013&sprefix=bullet+9mm%2Caps%2C169&sr=8-1"])
     ]
     # convert to 2d list, where each list has urls from different hosts
     url_bursts = []

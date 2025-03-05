@@ -39,6 +39,22 @@ def filter_divs(html):
     if main_container is None:
         print("Not a product")
         return
+
+    # get category at top
+    breadcrumbs = main_container.find(id="desktop-breadcrumbs_feature_div")
+
+
+    # skip dividers
+    category = []
+    try:
+        for list_item in breadcrumbs.find_all('li')[::2]:
+            print(list_item.prettify())
+            span = list_item.find("a", class_="a-color-tertiary")
+            category.append(soup_to_text(span))
+    except Exception as e:
+        category.append([f"Error When Attempting To Parse Category: {e}"])
+
+    print(category)
     right_col = main_container.find(id="rightCol" )
     center_col = main_container.find(id="centerCol")
     left_col = main_container.find(id = "leftCol")
@@ -47,8 +63,8 @@ def filter_divs(html):
     print(len(left_col.find_all('div')))
     p_title = center_col.find(id="productTitle")
     rating = center_col.find(id="acrPopover")
-
-    print(p_title.prettify())
+    
+    info_json['PTitle'] = soup_to_text(p_title)
     # table information
     tables = center_col.find_all('tbody')
     
@@ -81,7 +97,6 @@ def filter_divs(html):
             spans = [soup_to_text(span) for span in detail.find_all("span")]
             info_json[spans[0]] = spans[1]
 
-    print(info_json)
 
     try:
         prod_details = soup.find(id="prodDetails")
@@ -93,8 +108,7 @@ def filter_divs(html):
     except Exception:
         pass
 
-    # print(soup.find(id="topHighlights"))
-    # print(soup.prettify())
+    print(info_json)
 
 
 # Print or use the filtered HTML
