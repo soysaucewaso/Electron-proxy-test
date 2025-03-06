@@ -11,8 +11,12 @@ async def main():
     print('run')
     s = time.time()
     # hosts = get_urls()
+    p_urls = ["https://www.amazon.com/PlayStation-5-Pro-Console/dp/B0DGY63Z2H?crid=W63PK1IO1JEF&dib=eyJ2IjoiMSJ9.nRLN6tL2VMjei1uWpjwzT59bSV9lNNgGUvt4ebr2hciKb0V3QbLHRWN4L6j7bmO82fo9rkvu4YrKZv-Ldf3s8h2_E6O6OQVpTb6ZumvKcjFbbZkU83qx3x04VZSgnltfmNGf5SJJtSVineK_Vn0sJzNm81Q6YigTGVL3QBySyRQm6xHkpigWLxv5oM1fwg4B-uRLAs1C9RaYlcTYckuoZ-oAbh3lZROh6938I72cYK4.AU8nEbLJPb2PKWSvTXcwCCmTITw8p4j8WxXokHfjKl4&dib_tag=se&keywords=ps5&qid=1741247389&sprefix=ps%252Caps%252C171&sr=8-4"]
+    # with open('product_urls.json', 'r') as file:
+    #     p_urls = json.load(file)
+
     hosts = [
-        ("amazon", ["https://www.amazon.com/Action-Pro-Trainer-Cartridge-Ammunition/dp/B004KZ357G?crid=3U3SHOCHXSHQV&dib=eyJ2IjoiMSJ9.q8pcp032LPDg4B88dPlYKa6vDq2r8ceReo_sikBNtXv-51Bzoaq5O-E9-a_CHa1KWdDBZ2FLSluEk7V4655FW48e2ln3daIgU_C1y3omN7CrGPPyLqwglvsn7XMFWByVWc_L2Z2m4aUidXrv3zT700Fx_wZlQMFgAld4eGwEzK5CWZ4V-aCt1mBAd9Q6EKJjPFMNgVBelzN-j3v2_OUkcJ8DKn9lb3kwDbHJSbc-GhY8-vUQ7wQ0MVz82texcncGDvIqq48sGObUxbNquYUXYraj4MMqCTpsUFYJ0G7O8-kFZ6y7Qqwycwm4mudmIyDNe65C7sCptYwHhpwNkGlKCmss1gHmYbe97pZo-k5t-TP1VzATzHg2qtxnXhJ-O1W4IWyC3YmY_Q3mW7ijzmTZD-L4sJYlUYh_AQZMLcIkkfMie1ODiQc5QsNEM_HJeLBL.hgmlN2L13eoKfbQ5bN0m8xAuh83_IITOar2HuqHF_ck&dib_tag=se&keywords=bullet+9mm&qid=1741155013&sprefix=bullet+9mm%2Caps%2C169&sr=8-1"])
+            ("amazon", p_urls)
     ]
     # convert to 2d list, where each list has urls from different hosts
     url_bursts = []
@@ -31,7 +35,7 @@ async def main():
         headless=True,
         viewport_width=1920,
         viewport_height=1080,
-        browser_type = "firefox"
+        browser_type = "chromium"
 
     )
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -40,8 +44,11 @@ async def main():
             htmls += await scrape_urls(crawler, urls)
             print(len(htmls))
     
-    with open("Skillet.html", 'w') as file:
+    with open(f'Skillet.html', 'w') as file:
         file.write(htmls[0])
+    # for i, html in enumerate(htmls):
+    #     with open(f"Z{i}.html", 'w') as file:
+    #         file.write(html)
     # send htmls
     # send_htmls(htmls)
 
@@ -81,7 +88,6 @@ async def scrape_urls(crawler, urls):
         scan_full_page = True,
         magic=False,
         remove_overlay_elements=True,
-        screenshot=True,
 
 
     )
