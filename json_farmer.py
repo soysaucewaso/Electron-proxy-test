@@ -99,28 +99,38 @@ def filter_divs(html):
     structured_json['Stars'] = stars
     structured_json['N_Ratings'] = n_ratings
     # price
-    buy_options = right_col.find_all(id=re.compile(r'^\w+AccordionRow_?\d*$'))
+    # buy_options = right_col.find_all(id=re.compile(r'^\w+AccordionRow_?\d*$'))
+    buy_options = right_col.find_all(id="desktop_buybox")
     for offer in buy_options[:1]:
-        apexOffer = offer.find(id="apex_offerDisplay_desktop") 
-        price = apexOffer.find("span", class_ = "a-offscreen")
-        structured_json['Price'] = soup_to_text(price)
-
-        availability = offer.find("div", id="availability").find("span")
-        structured_json['Availability'] = soup_to_text(availability)
+        try:
+            apexOffer = offer.find(id="apex_offerDisplay_desktop") 
+            price = soup_to_text(apexOffer.find("span", class_ = "a-offscreen"))
+            availability = soup_to_text(offer.find("div", id="availability").find("span"))
+        except Exception:
+            price = None
+            availability = None
+        structured_json['Price'] = price
+        structured_json['Availability'] = availability
 
     # thumbnail
 
 
-    # product description
-    p_descript = main_container.find("div", id="productDescription")
-    descript = soup_to_text(p_descript.find('span'))
+    try:
+        # product description
+        p_descript = main_container.find("div", id="productDescription")
+        descript = soup_to_text(p_descript.find('span'))
+    except Exception:
+        try:
+            about_me_bullets = center_col.find("ul", class_="a-unordered-list a-vertical a-spacing-mini")
+            descript = ""
+            for li in about_me_bullets.find_all("span", class_="a-list-item"):
+                descript+=soup_to_text(li)
+                descript+="\n"
+            descript = descript[:-1]
+        except Exception:
+            descript = "Not Found"
+                
     structured_json['Description'] = descript
-    # curr_container = None
-    # descript = main_container
-    # while descript is not None:
-    #     curr_container = descript
-    #     descript = curr_container.find("div", id="productDescription_feature_div")
-
 
     
 
@@ -175,6 +185,16 @@ def filter_divs(html):
     except Exception:
         pass
 
+    # aplus (seller generated)
+    try:
+        aplus = main_container.find('div', id='aplus')
+        tables = aplus.find_all('tbody')
+
+        for table in tables:
+            details_json |= tbody_to_dict(table)
+    except Exception:
+        pass
+
     # append additional common products to structured_json
     additional_keys = ['Product Dimensions', 'Item Weight', 'Country of Origin', 'Number of Pieces', 'Batteries required', 'Brand', 'UPC', 'Number of Items', 'Manufacturer', 'ASIN', 'Best Sellers Rank']
 
@@ -214,7 +234,12 @@ def create_table_schema(cat, jsons):
         Only include keys, remove all values.
         Don't provide any text other than the list
         """
+    example_msg = f"""
+
+    """
+    keys = {}
     jsons = [str(json) for json in jsons]
+    
     user_msg_content = f"{'\n\n'.join(jsons)}"
     chat_completion = openai.chat.completions.create(
     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
@@ -234,16 +259,17 @@ s = time.time()
 
 # LLM schema
 jsons_by_category = collections.defaultdict(list)
-for i in range(1, 10):
+for i in range(0, 10):
     with open(f'Z{i}.html', 'r') as file:
         html = file.read()
-
+        print(i)
         s_json, d_json = filter_divs(html)
         c_str = s_json['Category']
         jsons_by_category[c_str].append((s_json, d_json))
 
 most_popular = [(len(jsons), cat, jsons) for cat, jsons in jsons_by_category.items()]
 most_popular.sort(reverse=True)
+print([m[0] for m in most_popular])
 _, cat, jsons = most_popular[0]
 
 s_jsons = [j[0] for j in jsons]
@@ -256,7 +282,7 @@ for key in s_jsons[0]:
 print('\n\n')
 
 for key in d_jsons[0]:
-    print(key)
+    print(f'{key}\t{d_jsons[0][key]}')
 
 
 print('\n\n')
