@@ -11,11 +11,12 @@ async def main():
     print('run')
     s = time.time()
     # hosts = get_urls()
-    with open('product_urls.json', 'r') as file:
+    with open('fountain-urls.json', 'r') as file:
         p_urls = json.load(file)
 
+    print(len(p_urls))
     hosts = [
-        ("amazon", p_urls[:10])
+        ("amazon", p_urls)
     ]
     # convert to 2d list, where each list has urls from different hosts
     url_bursts = []

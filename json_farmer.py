@@ -209,7 +209,10 @@ def filter_divs(html):
             structured_json[key] = None
 
     for key in delete_keys:
-        del details_json[key_cleaner(key)]
+        try:
+            del details_json[key_cleaner(key)]
+        except Exception:
+            pass
 
     # clean details json
     new_details_json = {}
@@ -224,20 +227,20 @@ def filter_divs(html):
 def create_table_schema(cat, jsons):
     openai = OpenAI(
             base_url="https://api.deepinfra.com/v1/openai",
+        api_key=""
             )
     system_msg_content = f"""
         You will be given JSONS representing products of category [{cat}].
         Use the jsons to make a newline-separated list of the keys which a user might want to use to filter out irrelevant products.
-        If multiple keys have the same meaning, (e.g. Memory and RAM), combine them into a single backslash-seperated row. 
         Don't include any key in multiple rows. 
         Remove rows which only appear in 40% or less of JSONs. 
-        Only include keys, remove all values.
-        Don't provide any text other than the list
-        """
+        On each line include keys, do not include values
+        Only include keys which could be significant to the user.
+        Don't provide any other text.
+    """
     example_msg = f"""
 
     """
-    keys = {}
     jsons = [str(json) for json in jsons]
     
     user_msg_content = f"{'\n\n'.join(jsons)}"
@@ -246,8 +249,23 @@ def create_table_schema(cat, jsons):
     messages=[{"role": "system", "content": system_msg_content},
               {"role": "user", "content": user_msg_content}],
 )
+    # system_msg_content = f"""
+    #     You will be given a list of keys and values which will be used to filter products of category [{cat}].
+    #     Combine keys with the same meaning (e.g. Memory and RAM) into a single row delimited by backslashes(\\). 
+    #     Return a list of newline-seperated rows.
+    #     Don't provide any text other than the list.
+    # """
+    # user_msg_content = chat_completion.choices[0].message.content
+    # print('user')
+    # print(user_msg_content)
+    # print('\n\n')
+#     chat_completion = openai.chat.completions.create(
+#     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+#     messages=[{"role": "system", "content": system_msg_content},
+#               {"role": "user", "content": user_msg_content}],
+# )
 
-    result = chat_completion.choices[0].message.content
+    result = chat_completion.choices[0].message.content 
     return result
 
 s = time.time()
@@ -259,7 +277,7 @@ s = time.time()
 
 # LLM schema
 jsons_by_category = collections.defaultdict(list)
-for i in range(0, 10):
+for i in range(0, 20):
     with open(f'Z{i}.html', 'r') as file:
         html = file.read()
         print(i)
@@ -274,7 +292,7 @@ _, cat, jsons = most_popular[0]
 
 s_jsons = [j[0] for j in jsons]
 d_jsons = [j[1] for j in jsons]
-schema = create_table_schema(cat, d_jsons)
+schema = create_table_schema(cat, d_jsons[10:])
 
 for key in s_jsons[0]:
     print(f'{key}\t{s_jsons[0][key]}')
@@ -285,8 +303,36 @@ for key in d_jsons[0]:
     print(f'{key}\t{d_jsons[0][key]}')
 
 
+
 print('\n\n')
 print(schema)
+structured_keys = [key for key in s_jsons[0]]
+schema_keys = schema.split('\n')
+print('\n\n')
+ls = []
+for i, j in enumerate(d_jsons):
+    l = []
+    for key in structured_keys:
+        l.append(s_jsons[i][key])
+    for key in schema_keys:
+        key = key.strip()
+        if key in j:
+            l.append(j[key])
+        else:
+            l.append(None)
+    ls.append(l)
+
+df = pd.DataFrame(ls, columns = structured_keys + schema_keys)
+df.to_csv('fountains.csv')
+
+
+#     for key in filtered_keys:
+#         if key in j:
+#             filtered_keys[key].append(j[key])
+#         else:
+#             filtered_keys[key].append(None)
+#
+# print(filtered_keys)
 #
 # for row in schema.split('\n'):
 #     print('\n')
@@ -300,10 +346,10 @@ print(schema)
 #         print(vals)
 
 
-jsons = []
-for _, js in jsons_by_category.items():
-    for j in js:
-        jsons.append(j)
+# jsons = []
+# for _, js in jsons_by_category.items():
+#     for j in js:
+#         jsons.append(j)
 
 # csv
 # keys = collections.defaultdict(int)
