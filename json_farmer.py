@@ -1,10 +1,17 @@
 from bs4 import BeautifulSoup
-import re
-import time
 import collections
 from openai import OpenAI
 import datetime
+import time
 import pandas as pd
+import regex as re
+
+async def get_links(html):
+        # Parse the HTML content using BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Find all anchor tags and extract the href attribute
+
 
 def soup_to_text(span, key=False):
     txt = " ".join(cleaner(span.text).split())
@@ -17,7 +24,10 @@ def cleaner(s):
     return re.sub(r'[\u200e|\u200f]', ' ', s)
 
 def key_cleaner(s):
-    return s.strip().lower()
+    s = s.strip().lower()
+    if len(s) > 0 and s[-1] == ':':
+        s = s[:-1].strip().lower()
+    return s
 
 # allow long rows gets first 2 vals from row
 # otherwise skips
@@ -42,6 +52,9 @@ def tbody_to_dict(tbody, allow_long_rows=False):
             pass
     return d
 
+def urljoin(u1, u2):
+    return u1 + u2
+
 def filter_divs(html):
     # will have same keys for each product
     structured_json = {}
@@ -50,13 +63,18 @@ def filter_divs(html):
 
     soup = BeautifulSoup(html, "lxml")
 
-# Example: Keep only the first half of <div> elements
     # divs = soup.find_all("div")
+    urls = [a['href'] for a in soup.find_all('a', href=True)]
+
+    # Ensure all links are absolute by adding the base URL if necessary
+    base_url = "https://www.amazon.com/"
+    absolute_urls = [urljoin(base_url, url) if not url.startswith(('http://', 'https://')) else url for url in urls]
+
     main_container = soup.find(id="dp-container")
 
     if main_container is None:
         print("Not a product")
-        return
+        return None, None, absolute_urls
 
     # fill in columns which don't require html
     structured_json['Scrape Date'] = str(datetime.datetime.today())
@@ -72,7 +90,7 @@ def filter_divs(html):
             span = list_item.find("a", class_="a-color-tertiary")
             category.append(soup_to_text(span))
     except Exception as e:
-        category.append([f"Error When Attempting To Parse Category: {e}"])
+        category.append(f"Error When Attempting To Parse Category: {e}")
     structured_json['Category'] = "\\".join(category)
 
     right_col = main_container.find(id="rightCol" )
@@ -107,7 +125,16 @@ def filter_divs(html):
             price = soup_to_text(apexOffer.find("span", class_ = "a-offscreen"))
             availability = soup_to_text(offer.find("div", id="availability").find("span"))
         except Exception:
-            price = None
+            corePrice = center_col.find('div', id='corePrice_desktop')
+            prices = corePrice.find_all('span', class_='a-price a-text-price a-size-medium apexPriceToPay')
+            costs = [p.find('span',class_='a-offscreen') for p in prices]
+            if len(costs) == 1:
+                price = costs[0]
+                price = soup_to_text(price)
+            elif len(costs) > 1:
+                price = f'{soup_to_text(costs[0])} - {soup_to_text(costs[1])}'
+            else:
+                price = None
             availability = None
         structured_json['Price'] = price
         structured_json['Availability'] = availability
@@ -163,8 +190,10 @@ def filter_divs(html):
     product_details = main_container.find_all(id='detailBullets_feature_div')
     for details in product_details:
         for detail in details.find_all(class_ = 'a-list-item'):
-            spans = [soup_to_text(span) for span in detail.find_all("span")]
-            details_json[key_cleaner(spans[0])] = spans[1]
+            spans = detail.find_all("span")
+            if len(spans) == 2:
+                spans = [soup_to_text(span) for span in spans]
+                details_json[key_cleaner(spans[0])] = spans[1]
 
 
     try:
@@ -208,11 +237,16 @@ def filter_divs(html):
         else:
             structured_json[key] = None
 
+    for key in structured_json:
+        cleaned_key = key_cleaner(key)
+        if cleaned_key in details_json:
+            del details_json[cleaned_key]
+        
+
     for key in delete_keys:
-        try:
-            del details_json[key_cleaner(key)]
-        except Exception:
-            pass
+        cleaned_key = key_cleaner(key)
+        if cleaned_key in details_json:
+            del details_json[cleaned_key]
 
     # clean details json
     new_details_json = {}
@@ -221,34 +255,56 @@ def filter_divs(html):
             new_details_json[key] = details_json[key]
         
 
-    return structured_json, new_details_json
+    return structured_json, new_details_json, absolute_urls
 
 
 def create_table_schema(cat, jsons):
-    openai = OpenAI(
-            base_url="https://api.deepinfra.com/v1/openai",
-        api_key=""
-            )
-    system_msg_content = f"""
-        You will be given JSONS representing products of category [{cat}].
-        Use the jsons to make a newline-separated list of the keys which a user might want to use to filter out irrelevant products.
-        Don't include any key in multiple rows. 
-        Remove rows which only appear in 40% or less of JSONs. 
-        On each line include keys, do not include values
-        Only include keys which could be significant to the user.
-        Don't provide any other text.
-    """
-    example_msg = f"""
+    # openai = OpenAI(
+    #         base_url="https://api.deepinfra.com/v1/openai",
+    #     api_key=""
+    #         )
 
-    """
-    jsons = [str(json) for json in jsons]
+       # You will be given JSONS representing products of category [{cat}].
+       # Use the jsons to make a newline-separated list of the keys which a user might want to use to filter out irrelevant products.
+#     system_msg_content = f"""
+#         You will be given a JSON describing 10 products scraped from an ecommerce website's tables of category: [
+# {cat}].
+#         Each key describes an attribute of the product.
+#         Each value is a list of the associated values for each product in which the key appears.
+#         Don't include any key in multiple rows. 
+#         On each line include keys, do not include values
+#         Only include keys which could be significant to the user.
+#         Don't provide any other text.
+#     """
+#     example_msg = f"""
+#
+#     """
+    keys = collections.defaultdict(list)
+    for j in jsons:
+        for k, v in j.items():
+            keys[k].append(v)
+
+    keys_cp = []
+    for k, l in keys.items():
+        if len(l) >= 3:
+            keys_cp.append((k, l))
+
+    keys = [k for (k, _) in keys_cp]
+    # jsons = [str(json) for json in jsons]
+    # keys = [f'{k} : {str(v)}' for k, v in keys_cp]
+     
+    # user_msg_content = f"{'\n'.join(keys)}"
+    # print(user_msg_content)
     
-    user_msg_content = f"{'\n\n'.join(jsons)}"
-    chat_completion = openai.chat.completions.create(
-    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
-    messages=[{"role": "system", "content": system_msg_content},
-              {"role": "user", "content": user_msg_content}],
-)
+    # llm
+    # keys = [f'{k} : {str(v)}' for k, v in keys)]
+    
+#     chat_completion = openai.chat.completions.create(
+#     model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+#     messages=[{"role": "system", "content": system_msg_content},
+#               {"role": "user", "content": user_msg_content}],
+# )
+
     # system_msg_content = f"""
     #     You will be given a list of keys and values which will be used to filter products of category [{cat}].
     #     Combine keys with the same meaning (e.g. Memory and RAM) into a single row delimited by backslashes(\\). 
@@ -265,119 +321,119 @@ def create_table_schema(cat, jsons):
 #               {"role": "user", "content": user_msg_content}],
 # )
 
-    result = chat_completion.choices[0].message.content 
-    return result
+    # result = chat_completion.choices[0].message.content 
+    return keys
 
-s = time.time()
-# with open(f'Skillet.html', 'r') as file:
-#     html = file.read()
-#     j, c = filter_divs(html)
-#     print(c)
-#     print(j)
-
-# LLM schema
-jsons_by_category = collections.defaultdict(list)
-for i in range(0, 20):
-    with open(f'Z{i}.html', 'r') as file:
-        html = file.read()
-        print(i)
-        s_json, d_json = filter_divs(html)
-        c_str = s_json['Category']
-        jsons_by_category[c_str].append((s_json, d_json))
-
-most_popular = [(len(jsons), cat, jsons) for cat, jsons in jsons_by_category.items()]
-most_popular.sort(reverse=True)
-print([m[0] for m in most_popular])
-_, cat, jsons = most_popular[0]
-
-s_jsons = [j[0] for j in jsons]
-d_jsons = [j[1] for j in jsons]
-schema = create_table_schema(cat, d_jsons[10:])
-
-for key in s_jsons[0]:
-    print(f'{key}\t{s_jsons[0][key]}')
-
-print('\n\n')
-
-for key in d_jsons[0]:
-    print(f'{key}\t{d_jsons[0][key]}')
-
-
-
-print('\n\n')
-print(schema)
-structured_keys = [key for key in s_jsons[0]]
-schema_keys = schema.split('\n')
-print('\n\n')
-ls = []
-for i, j in enumerate(d_jsons):
-    l = []
-    for key in structured_keys:
-        l.append(s_jsons[i][key])
-    for key in schema_keys:
-        key = key.strip()
-        if key in j:
-            l.append(j[key])
-        else:
-            l.append(None)
-    ls.append(l)
-
-df = pd.DataFrame(ls, columns = structured_keys + schema_keys)
-df.to_csv('fountains.csv')
-
-
-#     for key in filtered_keys:
-#         if key in j:
-#             filtered_keys[key].append(j[key])
-#         else:
-#             filtered_keys[key].append(None)
+# s = time.time()
+# # with open(f'Skillet.html', 'r') as file:
+# #     html = file.read()
+# #     j, c = filter_divs(html)
+# #     print(c)
+# #     print(j)
 #
-# print(filtered_keys)
+# # LLM schema
+# jsons_by_category = collections.defaultdict(list)
+# for i in range(0, 18):
+#     with open(f'htmls/Z{i}.html', 'r') as file:
+#         html = file.read()
+#         print(i)
+#         s_json, d_json = filter_divs(html)
+#         c_str = s_json['Category']
+#         jsons_by_category[c_str].append((s_json, d_json))
 #
-# for row in schema.split('\n'):
-#     print('\n')
-#     for key in row.split('\\'):
+# most_popular = [(len(jsons), cat, jsons) for cat, jsons in jsons_by_category.items()]
+# most_popular.sort(reverse=True)
+# print([m[0] for m in most_popular])
+# _, cat, jsons = most_popular[0]
+#
+# s_jsons = [j[0] for j in jsons]
+# d_jsons = [j[1] for j in jsons]
+# schema = create_table_schema(cat, d_jsons[10:])
+#
+# for key in s_jsons[0]:
+#     print(f'{key}\t{s_jsons[0][key]}')
+#
+# print('\n\n')
+#
+# for key in d_jsons[0]:
+#     print(f'{key}\t{d_jsons[0][key]}')
+#
+#
+#
+# print('\n\n')
+# print(schema)
+# structured_keys = [key for key in s_jsons[0]]
+# schema_keys = schema
+# print('\n\n')
+# ls = []
+# for i, j in enumerate(d_jsons):
+#     l = []
+#     for key in structured_keys:
+#         l.append(s_jsons[i][key])
+#     for key in schema_keys:
 #         key = key.strip()
-#         print(f'KEY: {key}')
-#         vals = ''
-#         for i, j in enumerate(jsons):
-#             if key in j:
-#                 vals += j[key] + f'\\{i}\\'
-#         print(vals)
-
-
-# jsons = []
-# for _, js in jsons_by_category.items():
-#     for j in js:
-#         jsons.append(j)
-
-# csv
-# keys = collections.defaultdict(int)
-# for i in range(len(jsons)):
-#     jsons[i] = {key.strip().lower(): v for key, v in jsons[i].items()}
-#     for key in jsons[i]:
-#         keys[key] += 1
-#
-# filtered_keys = {}
-# for key, count in keys.items():
-#     if count == len(jsons):
-#         filtered_keys[key] = []
-#
-# additional = ['Product Dimensions', 'Item Weight', 'Country of Origin', 'Number of Pieces', 'Batteries required', 'Brand', 'UPC', 'Manufacturer', 'Best Sellers Rank', 'ASIN',]
-#
-# for key in additional:
-#     filtered_keys[key.strip().lower()] = []
-#
-# for j in jsons:
-#     for key in filtered_keys:
 #         if key in j:
-#             filtered_keys[key].append(j[key])
+#             l.append(j[key])
 #         else:
-#             filtered_keys[key].append(None)
+#             l.append(None)
+#     ls.append(l)
 #
-# print(filtered_keys)
-
-
-
-e = time.time()
-print(f'Time: {e-s}')
+# df = pd.DataFrame(ls, columns = structured_keys + schema_keys)
+# df.to_csv('csvs/balms.csv')
+#
+#
+# #     for key in filtered_keys:
+# #         if key in j:
+# #             filtered_keys[key].append(j[key])
+# #         else:
+# #             filtered_keys[key].append(None)
+# #
+# # print(filtered_keys)
+# #
+# # for row in schema.split('\n'):
+# #     print('\n')
+# #     for key in row.split('\\'):
+# #         key = key.strip()
+# #         print(f'KEY: {key}')
+# #         vals = ''
+# #         for i, j in enumerate(jsons):
+# #             if key in j:
+# #                 vals += j[key] + f'\\{i}\\'
+# #         print(vals)
+#
+#
+# # jsons = []
+# # for _, js in jsons_by_category.items():
+# #     for j in js:
+# #         jsons.append(j)
+#
+# # csv
+# # keys = collections.defaultdict(int)
+# # for i in range(len(jsons)):
+# #     jsons[i] = {key.strip().lower(): v for key, v in jsons[i].items()}
+# #     for key in jsons[i]:
+# #         keys[key] += 1
+# #
+# # filtered_keys = {}
+# # for key, count in keys.items():
+# #     if count == len(jsons):
+# #         filtered_keys[key] = []
+# #
+# # additional = ['Product Dimensions', 'Item Weight', 'Country of Origin', 'Number of Pieces', 'Batteries required', 'Brand', 'UPC', 'Manufacturer', 'Best Sellers Rank', 'ASIN',]
+# #
+# # for key in additional:
+# #     filtered_keys[key.strip().lower()] = []
+# #
+# # for j in jsons:
+# #     for key in filtered_keys:
+# #         if key in j:
+# #             filtered_keys[key].append(j[key])
+# #         else:
+# #             filtered_keys[key].append(None)
+# #
+# # print(filtered_keys)
+#
+#
+#
+# e = time.time()
+# print(f'Time: {e-s}')
